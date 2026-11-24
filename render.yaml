@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: twitch-timestamp-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: TWITCH_TOKEN
+        sync: false
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CHANNEL
+        sync: false
+      - key: BOT_PREFIX
+        value: "!"
+      - key: DELETE_COMMAND_MESSAGE
+        value: "false"
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false

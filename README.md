@@ -24,7 +24,10 @@ A standalone Twitch bot for streamers and video editors that captures precise ti
    ```markdown
    - **[01:24:35]** (19:54:35) @moderator: epic 1v4 clutch
    ```
-4. After the stream, video editors open the generated file and have all timestamps ready for editing!
+4. After the stream, video editors can:
+   - Receive an automated **Discord notification** with direct links to view and download the notes.
+   - Access the **web page** (e.g. `https://your-bot.onrender.com`) to browse and download timestamp files.
+   - Or open the generated files locally from `timestamps/`.
 
 ---
 

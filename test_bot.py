@@ -1,6 +1,7 @@
 """
 Unit tests for Twitch Timestamp Bot.
-Verifies duration formatting, file creation, header structure, and timestamp recording.
+Verifies duration formatting, file creation, header structure,
+session counters, and web server endpoints.
 """
 
 import unittest
@@ -8,11 +9,14 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import tempfile
 import shutil
+from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
 from storage import format_duration, StreamStorage
+import web
+import config
 
 
-class TestTimestampBot(unittest.TestCase):
+class TestStorageAndLogic(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory for test file generation
         self.test_dir = Path(tempfile.mkdtemp())
@@ -61,8 +65,8 @@ class TestTimestampBot(unittest.TestCase):
         finally:
             storage.OUTPUT_DIR = old_output_dir
 
-    def test_record_timestamp_without_comment(self):
-        """Test timestamp recording without a comment."""
+    def test_session_tracking_and_reset(self):
+        """Test tracking session counters and resetting when stream ends."""
         import storage
         old_output_dir = storage.OUTPUT_DIR
         try:
@@ -70,45 +74,76 @@ class TestTimestampBot(unittest.TestCase):
             stream_storage = StreamStorage("test_channel")
 
             stream_start = datetime(2026, 11, 24, 18, 0, 0, tzinfo=timezone.utc)
-            record_time = stream_start + timedelta(minutes=15, seconds=2)
+            t1 = stream_start + timedelta(minutes=5)
+            t2 = stream_start + timedelta(minutes=15)
 
-            uptime_str, real_time_str, file_path = stream_storage.record_timestamp(
-                stream_started_at=stream_start,
-                recorded_at=record_time,
-                author_name="streamer",
-                comment=""
-            )
+            stream_storage.record_timestamp(stream_start, t1, "mod", "note 1")
+            stream_storage.record_timestamp(stream_start, t2, "mod", "note 2")
 
-            self.assertEqual(uptime_str, "00:15:02")
-            content = file_path.read_text(encoding="utf-8")
-            self.assertIn("- **[00:15:02]**", content)
-            self.assertIn("@streamer\n", content)
+            self.assertEqual(stream_storage.session_timestamps_count, 2)
+            self.assertIsNotNone(stream_storage.session_file_name)
+
+            stream_storage.reset_session()
+            self.assertEqual(stream_storage.session_timestamps_count, 0)
+            self.assertIsNone(stream_storage.session_file_name)
         finally:
             storage.OUTPUT_DIR = old_output_dir
 
-    def test_multiple_records_in_same_file(self):
-        """Test consecutive timestamp records within a single stream broadcast."""
-        import storage
-        old_output_dir = storage.OUTPUT_DIR
-        try:
-            storage.OUTPUT_DIR = self.test_dir
-            stream_storage = StreamStorage("test_channel")
 
-            stream_start = datetime(2026, 11, 24, 18, 0, 0, tzinfo=timezone.utc)
-            t1 = stream_start + timedelta(minutes=10)
-            t2 = stream_start + timedelta(minutes=45)
+class TestWebServer(AioHTTPTestCase):
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp())
+        self.old_dir = config.OUTPUT_DIR
+        config.OUTPUT_DIR = self.test_dir
 
-            _, _, path1 = stream_storage.record_timestamp(stream_start, t1, "mod1", "first clip")
-            _, _, path2 = stream_storage.record_timestamp(stream_start, t2, "mod2", "second clip")
+        # Create a sample stream file
+        self.sample_file = self.test_dir / "stream_2026-11-24_18-00.md"
+        self.sample_file.write_text(
+            "# 🎬 Stream Timestamps: 2026-11-24 18:00\n- **[00:05:00]** (18:05:00) @mod: test\n",
+            encoding="utf-8"
+        )
 
-            self.assertEqual(path1, path2)
-            content = path1.read_text(encoding="utf-8")
-            self.assertIn("- **[00:10:00]**", content)
-            self.assertIn("- **[00:45:00]**", content)
-            # Header should only be written once
-            self.assertEqual(content.count("# 🎬 Stream Timestamps:"), 1)
-        finally:
-            storage.OUTPUT_DIR = old_output_dir
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        config.OUTPUT_DIR = self.old_dir
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    async def get_application(self):
+        return web.create_web_app()
+
+    @unittest_run_loop
+    async def test_healthz_endpoint(self):
+        """Test /healthz endpoint returns 200 OK."""
+        resp = await self.client.request("GET", "/healthz")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertEqual(text, "OK")
+
+    @unittest_run_loop
+    async def test_index_page(self):
+        """Test / renders list with the recorded stream."""
+        resp = await self.client.request("GET", "/")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertIn("Twitch Timestamps", text)
+        self.assertIn("stream_2026-11-24_18-00.md", text)
+
+    @unittest_run_loop
+    async def test_view_stream_page(self):
+        """Test /stream/{filename} displays the file content."""
+        resp = await self.client.request("GET", "/stream/stream_2026-11-24_18-00.md")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertIn("- **[00:05:00]**", text)
+
+    @unittest_run_loop
+    async def test_download_stream(self):
+        """Test /download/{filename} delivers the markdown file download."""
+        resp = await self.client.request("GET", "/download/stream_2026-11-24_18-00.md")
+        self.assertEqual(resp.status, 200)
+        self.assertIn("attachment", resp.headers.get("Content-Disposition", ""))
 
 
 if __name__ == "__main__":

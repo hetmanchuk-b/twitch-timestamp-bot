@@ -21,6 +21,9 @@ Moderators and the broadcaster can trigger the `!time` command in chat (with an 
 | **FR-7** | **Chat Response** | Upon recording a timestamp, the bot replies in chat mentioning the user and providing the stream uptime (e.g., `@moderator 01:24:35`). |
 | **FR-8** | **Auto-Delete Command** | Option to automatically delete the `!time` command message from chat if the bot has moderator permissions. |
 | **FR-9** | **Per-Stream File Output** | Each broadcast generates its own separate file in the `timestamps/` directory formatted as `stream_YYYY-MM-DD_HH-MM.md`. |
+| **FR-10** | **Real-Time Discord Webhook** | When a timestamp is recorded, sends a rich Discord Embed card with uptime, author, and note to `DISCORD_WEBHOOK_URL` (if configured). |
+| **FR-11** | **End-of-Stream Summary** | When the stream ends, if any timestamps were recorded during that session, posts an end-of-stream summary to Discord with a direct link to the web page and download. |
+| **FR-12** | **Web Interface & Healthcheck** | Built-in HTTP server (`aiohttp.web`) providing `/` (stream files list), `/stream/{filename}` (view raw markdown), `/download/{filename}` (download file), and `/healthz` (200 OK for Render / UptimeRobot). |
 
 ---
 

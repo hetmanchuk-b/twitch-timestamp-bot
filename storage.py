@@ -1,6 +1,7 @@
 """
 Storage module for timestamp management.
-Creates structured Markdown files for each distinct stream broadcast.
+Creates structured Markdown files for each distinct stream broadcast
+and tracks live broadcast session statistics.
 """
 
 from datetime import datetime, timezone
@@ -25,6 +26,15 @@ class StreamStorage:
         self.channel_name = channel_name
         self.current_stream_started_at: Optional[datetime] = None
         self.current_file_path: Optional[Path] = None
+        self.session_timestamps_count: int = 0
+        self.session_file_name: Optional[str] = None
+
+    def reset_session(self):
+        """Resets stream session counters when a stream concludes."""
+        self.session_timestamps_count = 0
+        self.session_file_name = None
+        self.current_stream_started_at = None
+        self.current_file_path = None
 
     def get_or_create_file(self, stream_started_at: datetime) -> Path:
         """
@@ -53,8 +63,13 @@ class StreamStorage:
             file_path.write_text(header, encoding="utf-8")
             logger.info(f"📁 Created new timestamp file: {file_path}")
 
+        # Reset session count if this is a new stream session
+        if self.current_stream_started_at != stream_started_at:
+            self.session_timestamps_count = 0
+
         self.current_stream_started_at = stream_started_at
         self.current_file_path = file_path
+        self.session_file_name = file_name
         return file_path
 
     def record_timestamp(
@@ -99,5 +114,7 @@ class StreamStorage:
         # Append entry to the file
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(entry_line)
+
+        self.session_timestamps_count += 1
 
         return uptime_str, real_time_str, file_path

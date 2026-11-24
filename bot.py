@@ -1,6 +1,7 @@
 """
 Twitch Timestamp Bot (Protocol Bot)
-Main module for starting the bot and processing chat commands.
+Main module for starting the bot, embedded web server, Discord notifications,
+and stream status monitoring.
 """
 
 import sys
@@ -16,13 +17,15 @@ except RuntimeError:
 
 import config
 from config import logger
-from storage import StreamStorage
+from storage import StreamStorage, format_duration
+import discord_notify
+import web
 from twitchio.ext import commands
 from twitchio import errors
 
 
 class ProtocolBot(commands.Bot):
-    """Bot for capturing and storing live stream timestamps."""
+    """Bot for capturing and storing live stream timestamps with web interface and Discord alerts."""
 
     def __init__(self):
         super().__init__(
@@ -35,6 +38,12 @@ class ProtocolBot(commands.Bot):
         self.bot_user_id: Optional[str] = None
         self.broadcaster_user_id: Optional[str] = None
 
+        # State tracking for stream end detection
+        self.is_live: bool = False
+        self.active_stream_start: Optional[datetime] = None
+        self.web_runner: Optional[object] = None
+        self._monitor_task: Optional[asyncio.Task] = None
+
     async def event_ready(self):
         """Triggered upon successful connection to Twitch IRC and joined channel."""
         logger.info("=" * 60)
@@ -44,7 +53,18 @@ class ProtocolBot(commands.Bot):
         logger.info(f"   • Command: {config.BOT_PREFIX}time [comment]")
         logger.info(f"   • Auto-delete commands: {'Enabled' if config.DELETE_COMMAND_MESSAGE else 'Disabled'}")
         logger.info(f"   • Timestamps Directory: {config.OUTPUT_DIR}")
+        logger.info(f"   • Discord Webhook: {'Configured' if config.DISCORD_WEBHOOK_URL else 'Not set'}")
         logger.info("=" * 60)
+
+        # Start embedded web server
+        try:
+            self.web_runner = await web.start_web_server(config.HOST, config.PORT)
+        except Exception as e:
+            logger.error(f"❌ Failed to start embedded web server: {e}")
+
+        # Start background stream monitor task
+        if self._monitor_task is None or self._monitor_task.done():
+            self._monitor_task = asyncio.create_task(self._stream_monitor_loop())
 
         # Token validation and user ID retrieval
         try:
@@ -64,6 +84,53 @@ class ProtocolBot(commands.Bot):
                 logger.info(f"📺 Channel found (Broadcaster ID: {self.broadcaster_user_id})")
         except Exception as e:
             logger.debug(f"Could not retrieve channel user information: {e}")
+
+    async def _stream_monitor_loop(self):
+        """
+        Background task running every STREAM_CHECK_INTERVAL seconds.
+        Detects when a stream ends and sends a summary with public links to Discord.
+        """
+        logger.info(f"📡 Stream status monitor started (interval: {config.STREAM_CHECK_INTERVAL}s).")
+        while True:
+            try:
+                await asyncio.sleep(config.STREAM_CHECK_INTERVAL)
+                streams = await self.fetch_streams(user_logins=[self.channel_name])
+
+                if streams:
+                    stream = streams[0]
+                    self.is_live = True
+                    self.active_stream_start = stream.started_at
+                else:
+                    # If stream was live previously and is now offline, the broadcast has concluded
+                    if self.is_live:
+                        self.is_live = False
+                        logger.info("🎬 Stream transition detected: LIVE -> OFFLINE.")
+
+                        total_moments = self.storage.session_timestamps_count
+                        session_file = self.storage.session_file_name
+                        stream_start = self.active_stream_start
+
+                        if total_moments > 0 and session_file and stream_start:
+                            now = datetime.now(timezone.utc)
+                            duration_seconds = (now - stream_start).total_seconds()
+                            duration_str = format_duration(duration_seconds)
+
+                            logger.info(
+                                f"🏁 Stream ended with {total_moments} recorded moments. "
+                                f"Sending Discord summary for {session_file}..."
+                            )
+                            await discord_notify.send_stream_ended_summary(
+                                channel_name=self.channel_name,
+                                total_timestamps=total_moments,
+                                stream_duration_str=duration_str,
+                                filename=session_file
+                            )
+
+                        self.storage.reset_session()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Stream monitor loop check encountered error: {e}")
 
     async def event_message(self, message):
         """Handles incoming chat messages."""
@@ -100,6 +167,8 @@ class ProtocolBot(commands.Bot):
 
         stream = streams[0]
         started_at = stream.started_at
+        self.is_live = True
+        self.active_stream_start = started_at
         now_utc = datetime.now(timezone.utc)
 
         # Save timestamp to Markdown file
@@ -116,7 +185,18 @@ class ProtocolBot(commands.Bot):
             logger.error(f"❌ Error writing timestamp to file: {e}")
             return
 
-        # Send the stream uptime and mention the author
+        # Send Discord Webhook notification if configured
+        asyncio.create_task(
+            discord_notify.send_timestamp_embed(
+                uptime_str=uptime_str,
+                real_time_str=real_time_str,
+                author_name=ctx.author.name,
+                comment=comment,
+                channel_name=self.channel_name
+            )
+        )
+
+        # Send the stream uptime and mention the author in Twitch chat
         try:
             await ctx.send(f"@{ctx.author.name} {uptime_str}")
         except Exception as e:

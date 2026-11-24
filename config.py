@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ProtocolBot")
 
-# Reading environment variables
+# Core Twitch configuration
 raw_token = os.getenv("TWITCH_TOKEN", "").strip()
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "").strip()
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "").strip().lower().lstrip("@")
@@ -38,6 +38,19 @@ BOT_PREFIX = os.getenv("BOT_PREFIX", "!").strip() or "!"
 DELETE_COMMAND_MESSAGE = os.getenv("DELETE_COMMAND_MESSAGE", "false").strip().lower() in ("true", "1", "yes")
 OUTPUT_DIR_NAME = os.getenv("OUTPUT_DIR", "timestamps").strip() or "timestamps"
 OUTPUT_DIR = BASE_DIR / OUTPUT_DIR_NAME
+
+# Web server & Render hosting configuration
+HOST = os.getenv("HOST", "0.0.0.0").strip()
+PORT = int(os.getenv("PORT", "8080").strip())
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+if not PUBLIC_BASE_URL:
+    PUBLIC_BASE_URL = f"http://localhost:{PORT}"
+
+# Discord Webhook integration
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+
+# Background stream status check interval (seconds)
+STREAM_CHECK_INTERVAL = int(os.getenv("STREAM_CHECK_INTERVAL", "60").strip())
 
 # Token formatting
 if raw_token.startswith("oauth:"):
