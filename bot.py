@@ -116,6 +116,12 @@ class ProtocolBot(commands.Bot):
             logger.error(f"❌ Error writing timestamp to file: {e}")
             return
 
+        # Send only the stream uptime to chat
+        try:
+            await ctx.send(uptime_str)
+        except Exception as e:
+            logger.error(f"❌ Error sending uptime to chat: {e}")
+
         # If auto-delete is enabled, attempt to delete the command message
         if config.DELETE_COMMAND_MESSAGE:
             await self._try_delete_message(ctx)

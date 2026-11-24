@@ -14,7 +14,8 @@ A standalone Twitch bot for streamers and video editors that captures precise ti
    ```text
    !time epic 1v4 clutch
    ```
-2. The bot **silently** (without spamming chat) captures the moment:
+2. The bot captures the moment and replies in chat with the stream uptime:
+   - Responds in chat with **only the stream uptime** (e.g., `01:24:35`).
    - Calculates **stream uptime** (`01:24:35`) — exact timestamp matching the VOD/recording timeline.
    - Captures **local real-world time** (`19:54:35`).
    - Records the user who saved the timestamp (`@moderator`).
