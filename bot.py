@@ -116,9 +116,9 @@ class ProtocolBot(commands.Bot):
             logger.error(f"❌ Error writing timestamp to file: {e}")
             return
 
-        # Send only the stream uptime to chat
+        # Send the stream uptime and mention the author
         try:
-            await ctx.send(uptime_str)
+            await ctx.send(f"@{ctx.author.name} {uptime_str}")
         except Exception as e:
             logger.error(f"❌ Error sending uptime to chat: {e}")
 

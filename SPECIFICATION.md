@@ -18,7 +18,7 @@ Moderators and the broadcaster can trigger the `!time` command in chat (with an 
 | **FR-4** | **Uptime Calculation** | The bot retrieves the stream start time (`started_at`) via the Twitch Helix API and computes the elapsed time in `HH:MM:SS` format, matching the VOD timeline. |
 | **FR-5** | **Real-World Timestamp** | Alongside the stream uptime, the local real-world time of the command execution is recorded (`HH:MM:SS`). |
 | **FR-6** | **Ignore Offline Commands** | If the stream is not live (channel is offline), the `!time` command is silently ignored and no entry is logged. |
-| **FR-7** | **Chat Response** | Upon recording a timestamp, the bot sends only the current stream uptime (e.g., `01:24:35`) to chat. |
+| **FR-7** | **Chat Response** | Upon recording a timestamp, the bot replies in chat mentioning the user and providing the stream uptime (e.g., `@moderator 01:24:35`). |
 | **FR-8** | **Auto-Delete Command** | Option to automatically delete the `!time` command message from chat if the bot has moderator permissions. |
 | **FR-9** | **Per-Stream File Output** | Each broadcast generates its own separate file in the `timestamps/` directory formatted as `stream_YYYY-MM-DD_HH-MM.md`. |
 
