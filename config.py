@@ -49,6 +49,9 @@ if not PUBLIC_BASE_URL:
 # Discord Webhook integration
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
 
+# Secret API key for OBS / external hotkey integrations (optional)
+API_KEY = os.getenv("API_KEY", "").strip()
+
 # Background stream status check interval (seconds)
 STREAM_CHECK_INTERVAL = int(os.getenv("STREAM_CHECK_INTERVAL", "60").strip())
 

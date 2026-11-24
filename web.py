@@ -363,19 +363,112 @@ async def handle_download_stream(request: web.Request) -> web.Response:
     )
 
 
-def create_web_app() -> web.Application:
-    """Creates the aiohttp web application with defined routes."""
+async def handle_api_time(request: web.Request) -> web.Response:
+    """
+    API endpoint (POST or GET) to trigger a timestamp without Twitch chat interaction.
+    Designed for OBS hotkey scripts, Stream Deck, and external automations.
+    """
+    import asyncio
+    from datetime import timezone
+
+    # 1. Authenticate with API_KEY if configured
+    if config.API_KEY:
+        header_key = request.headers.get("X-API-Key", "")
+        query_key = request.query.get("key", "")
+        if header_key != config.API_KEY and query_key != config.API_KEY:
+            return web.json_response({"error": "Unauthorized: invalid API key"}, status=401)
+
+    # 2. Extract parameters
+    author = "streamer"
+    note = ""
+
+    if request.can_read_body:
+        try:
+            data = await request.json()
+            note = str(data.get("note", "")).strip()
+            author = str(data.get("author", "")).strip() or "streamer"
+        except Exception:
+            pass
+
+    if not note and "note" in request.query:
+        note = request.query.get("note", "").strip()
+    if not author and "author" in request.query:
+        author = request.query.get("author", "").strip() or "streamer"
+
+    # 3. Retrieve bot instance
+    bot = request.app.get("bot")
+    if not bot:
+        return web.json_response({"error": "Bot is not ready"}, status=503)
+
+    # 4. Check stream live status
+    try:
+        streams = await bot.fetch_streams(user_logins=[bot.channel_name])
+    except Exception as e:
+        logger.error(f"❌ Error checking stream status in API: {e}")
+        return web.json_response({"error": f"API error: {e}"}, status=500)
+
+    if not streams:
+        logger.info(f"⏸️ [API OFFLINE] Hotkey timestamp from @{author} ignored (channel offline)")
+        return web.json_response({"status": "offline", "message": "Stream is currently offline"}, status=200)
+
+    stream = streams[0]
+    started_at = stream.started_at
+    bot.is_live = True
+    bot.active_stream_start = started_at
+    now_utc = datetime.now(timezone.utc)
+
+    # 5. Record timestamp
+    try:
+        uptime_str, real_time_str, file_path = bot.storage.record_timestamp(
+            stream_started_at=started_at,
+            recorded_at=now_utc,
+            author_name=author,
+            comment=note or "OBS Hotkey"
+        )
+        logger.info(f"⏱️ [API RECORDED] [{uptime_str}] ({real_time_str}) @{author}: {note or 'OBS Hotkey'}")
+    except Exception as e:
+        logger.error(f"❌ Error saving timestamp via API: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+    # 6. Send Discord notification
+    import discord_notify
+    asyncio.create_task(
+        discord_notify.send_timestamp_embed(
+            uptime_str=uptime_str,
+            real_time_str=real_time_str,
+            author_name=author,
+            comment=note or "OBS Hotkey",
+            channel_name=bot.channel_name
+        )
+    )
+
+    return web.json_response({
+        "status": "ok",
+        "uptime": uptime_str,
+        "real_time": real_time_str,
+        "author": author,
+        "note": note or "OBS Hotkey",
+        "file": file_path.name
+    })
+
+
+def create_web_app(bot=None) -> web.Application:
+    """Creates the aiohttp web application with defined routes and optional bot reference."""
     app = web.Application()
+    if bot:
+        app["bot"] = bot
     app.router.add_get("/", handle_index)
     app.router.add_get("/healthz", handle_healthz)
     app.router.add_get("/stream/{filename}", handle_view_stream)
     app.router.add_get("/download/{filename}", handle_download_stream)
+    app.router.add_post("/api/time", handle_api_time)
+    app.router.add_get("/api/time", handle_api_time)
     return app
 
 
-async def start_web_server(host: str, port: int) -> web.AppRunner:
+async def start_web_server(host: str, port: int, bot=None) -> web.AppRunner:
     """Starts the embedded web server on the given host and port."""
-    app = create_web_app()
+    app = create_web_app(bot=bot)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)

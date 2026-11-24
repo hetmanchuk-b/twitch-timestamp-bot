@@ -58,7 +58,7 @@ class ProtocolBot(commands.Bot):
 
         # Start embedded web server
         try:
-            self.web_runner = await web.start_web_server(config.HOST, config.PORT)
+            self.web_runner = await web.start_web_server(config.HOST, config.PORT, bot=self)
         except Exception as e:
             logger.error(f"❌ Failed to start embedded web server: {e}")
 

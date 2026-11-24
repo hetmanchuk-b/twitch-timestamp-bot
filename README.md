@@ -117,6 +117,22 @@ Double-click `run_bot.bat` in the project root directory.
 
 ---
 
+## 🎥 OBS Studio Hotkey Integration
+
+The streamer can record highlights using a keyboard shortcut or Stream Deck button without typing anything in chat:
+
+1. In OBS Studio, open **Tools ➔ Scripts**.
+2. Click the **"+"** button and select the [obs_timestamp.lua](obs_timestamp.lua) file from the bot repository.
+3. In the script settings panel:
+   - **Bot Server URL**: Enter your bot URL (e.g. `http://localhost:8080` if running locally, or `https://your-bot.onrender.com` if on Render).
+   - **API Key**: Enter the `API_KEY` defined in your `.env` (or leave empty if no key is set).
+4. Go to **OBS Settings ➔ Hotkeys**:
+   - Locate **"Twitch Bot: Save Stream Timestamp"**.
+   - Assign any key combination (e.g. `Ctrl + Shift + T`, `F12`, or Stream Deck key).
+5. Whenever you press the key during a live stream, the timestamp is immediately recorded into the markdown file and sent to Discord!
+
+---
+
 ## 📁 Saved File Format
 
 For each stream, a dedicated file is created in `timestamps/`, named by the broadcast start date and time, e.g. `timestamps/stream_2026-11-24_18-30.md`:

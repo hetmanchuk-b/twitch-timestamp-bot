@@ -145,6 +145,26 @@ class TestWebServer(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         self.assertIn("attachment", resp.headers.get("Content-Disposition", ""))
 
+    @unittest_run_loop
+    async def test_api_time_auth(self):
+        """Test /api/time authentication."""
+        old_key = config.API_KEY
+        try:
+            config.API_KEY = "secret123"
+            # Request without key should fail with 401
+            resp = await self.client.request("POST", "/api/time")
+            self.assertEqual(resp.status, 401)
+
+            # Request with wrong key should fail with 401
+            resp = await self.client.request("POST", "/api/time", headers={"X-API-Key": "wrong"})
+            self.assertEqual(resp.status, 401)
+
+            # Request with correct key should pass auth (returns 503 because dummy bot is not set in test app)
+            resp = await self.client.request("POST", "/api/time", headers={"X-API-Key": "secret123"})
+            self.assertIn(resp.status, (200, 503))
+        finally:
+            config.API_KEY = old_key
+
 
 if __name__ == "__main__":
     unittest.main()
